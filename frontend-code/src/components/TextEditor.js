@@ -6,6 +6,8 @@ import 'quill/dist/quill.snow.css';
 import '../TextEditorStyles.css';
 import { Modal, Button, Input, message, Form, Space, Spin } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import AWS from 'aws-sdk';
+
 
 const TextEditor = () => {
   const { fileId } = useParams(); 
@@ -14,6 +16,8 @@ const TextEditor = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  const [apiUrls, setApiUrls] = useState({});
   const [form] = Form.useForm();
 
 var modules = {
@@ -40,14 +44,37 @@ var modules = {
     "link", "image", "align", "size",
   ];
 
+  useEffect(() => {
+    // Configure AWS SDK
+    AWS.config.update({
+      region: 'us-east-1', 
+      accessKeyId: 'AKIA6OZXJ42AP5CURUTY',
+      secretAccessKey: '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'
+    });
+
+    // Function to fetch API URLs from Secrets Manager
+    const fetchApiUrls = async () => {
+      const client = new AWS.SecretsManager();
+      try {
+        const data = await client.getSecretValue({ SecretId: 'MyAPIs' }).promise();
+        const secret = JSON.parse(data.SecretString);
+        setApiUrls(secret);
+      } catch (error) {
+        console.error("Error fetching API URLs: ", error);
+        message.error('Error fetching configuration. Please try again.');
+      }
+    };
+
+    fetchApiUrls();
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     const checkFileExists = async () => {
       try {
-        const response = await axios.get(`https://hz0aq1095f.execute-api.us-east-1.amazonaws.com/term-project/doesFileExists/${fileId}`);
+        const response = await axios.get(`${apiUrls['check-file']}/${fileId}`);
         if (response.data.exists) {
-          const fileContent = await axios.get(`https://hz0aq1095f.execute-api.us-east-1.amazonaws.com/term-project/getFileContent/${fileId}`);
+          const fileContent = await axios.get(`${apiUrls['get-file']}/${fileId}`);
           setContent(fileContent.data.content);
         } else {
           setIsModalVisible(true);
@@ -60,8 +87,10 @@ var modules = {
       }
     };
 
-    checkFileExists();
-  }, [fileId]);
+    if (apiUrls['check-file'] && apiUrls['get-file']) {
+      checkFileExists();
+    }
+  }, [fileId, apiUrls]);
 
   const handleProcedureContentChange = (newContent) => {
     setContent(newContent);
@@ -85,7 +114,7 @@ var modules = {
             return new Promise(async (resolve, reject) => {
               try {
                 const emails = values.emails.map(email => email.email);
-                await axios.post('https://hz0aq1095f.execute-api.us-east-1.amazonaws.com/term-project/send-email', {
+                await axios.post(`${apiUrls['send-email']}`, {
                   emails: emails,
                   link: fileId
                 });
@@ -122,7 +151,7 @@ var modules = {
   const handleSaveContent = async () => {
     setLoading(true);
     try {
-      await axios.put(`https://hz0aq1095f.execute-api.us-east-1.amazonaws.com/term-project/save`, {
+      await axios.put(`${apiUrls['save-file']}`, {
         fileId: fileId,
         htmlContent: content
       });

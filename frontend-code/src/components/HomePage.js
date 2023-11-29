@@ -1,17 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect  } from 'react';
 import { Button, message } from 'antd';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import '../HomePage.css'; // Make sure to update this CSS file as well
-
+import '../HomePage.css';
+import AWS from 'aws-sdk'
 const HomePage = () => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const [apiUrl, setApiUrl] = useState('');
+
+
+    useEffect(() => {
+        // Configure AWS SDK
+        AWS.config.update({
+            region: 'us-east-1', 
+            accessKeyId: 'AKIA6OZXJ42AP5CURUTY',
+            secretAccessKey: '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'
+        });
+
+        // Function to fetch the API URL from Secrets Manager
+        const fetchApiUrl = async () => {
+            const client = new AWS.SecretsManager();
+            try {
+                const data = await client.getSecretValue({ SecretId: 'MyAPIs' }).promise();
+                const secret = JSON.parse(data.SecretString);
+                setApiUrl(secret['create-file']);
+            } catch (error) {
+                console.error("Error fetching API URL: ", error);
+                message.error('Error fetching configuration. Please try again.');
+            }
+        };
+
+        fetchApiUrl();
+    }, []);
+
 
     const handleCreateFile = async () => {
+      if (!apiUrl) {
+            message.error('API URL not loaded. Please wait.');
+            return;
+        }
         setLoading(true);
         try {
-            const response = await axios.post('https://hz0aq1095f.execute-api.us-east-1.amazonaws.com/term-project/create');
+            const response = await axios.post(apiUrl);
             const fileId = response.data.fileId;
             navigate(`/${fileId}`);
         } catch (error) {
